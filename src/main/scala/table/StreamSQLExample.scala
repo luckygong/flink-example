@@ -20,7 +20,7 @@ package table
 import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.table._
 import org.apache.flink.api.table.TableEnvironment
-import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
+import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, DataStream}
 
 /**
  * Simple example for demonstrating the use of SQL on a Stream Table.
@@ -42,7 +42,6 @@ object StreamSQLExample {
     // set up execution environment
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val tEnv: StreamTableEnvironment = TableEnvironment.getTableEnvironment(env)
-
     val orderA: DataStream[Order] = env.fromCollection(Seq(Order(1L, "beer", 3), Order(1L, "diaper", 4), Order(3L, "rubber", 2)))
     val orderB: DataStream[Order] = env.fromCollection(Seq(Order(2L, "pen", 3), Order(2L, "rubber", 3), Order(4L, "beer", 1)))
 
