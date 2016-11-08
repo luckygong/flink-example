@@ -1,0 +1,93 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "type": "Source: Collection Source",
+      "pact": "Data Source",
+      "contents": "Source: Collection Source",
+      "parallelism": 1
+    },
+    {
+      "id": 2,
+      "type": "Source: Collection Source",
+      "pact": "Data Source",
+      "contents": "Source: Collection Source",
+      "parallelism": 1
+    },
+    {
+      "id": 3,
+      "type": "from: (user, product, amount, ct)",
+      "pact": "Operator",
+      "contents": "from: (user, product, amount, ct)",
+      "parallelism": 8,
+      "predecessors": [
+        {
+          "id": 1,
+          "ship_strategy": "REBALANCE",
+          "side": "second"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "where: (>(amount, 2)), select: (user, product, amount, ct)",
+      "pact": "Operator",
+      "contents": "where: (>(amount, 2)), select: (user, product, amount, ct)",
+      "parallelism": 8,
+      "predecessors": [
+        {
+          "id": 3,
+          "ship_strategy": "FORWARD",
+          "side": "second"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "from: (user, product, amount, ct)",
+      "pact": "Operator",
+      "contents": "from: (user, product, amount, ct)",
+      "parallelism": 8,
+      "predecessors": [
+        {
+          "id": 2,
+          "ship_strategy": "REBALANCE",
+          "side": "second"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "where: (<(amount, 2)), select: (user, product, amount, ct)",
+      "pact": "Operator",
+      "contents": "where: (<(amount, 2)), select: (user, product, amount, ct)",
+      "parallelism": 8,
+      "predecessors": [
+        {
+          "id": 5,
+          "ship_strategy": "FORWARD",
+          "side": "second"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "Sink: Unnamed",
+      "pact": "Data Sink",
+      "contents": "Sink: Unnamed",
+      "parallelism": 8,
+      "predecessors": [
+        {
+          "id": 4,
+          "ship_strategy": "FORWARD",
+          "side": "second"
+        },
+        {
+          "id": 6,
+          "ship_strategy": "FORWARD",
+          "side": "second"
+        }
+      ]
+    }
+  ]
+}

@@ -20,7 +20,8 @@ package table
 import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.table._
 import org.apache.flink.api.table.TableEnvironment
-import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, DataStream}
+import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
+import org.slf4j.LoggerFactory
 
 /**
  * Simple example for demonstrating the use of SQL on a Stream Table.
@@ -32,6 +33,7 @@ import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, DataStr
  *
  */
 object StreamSQLExample {
+  private lazy val logger = LoggerFactory.getLogger(getClass)
 
   // *************************************************************************
   //     PROGRAM
@@ -70,7 +72,7 @@ object StreamSQLExample {
     //        |GROUP BY
     //        |  TUMBLE(ct, INTERVAL ‘1’ MINUTE)
     //      """.stripMargin)
-
+    logger.info("========" + env.getExecutionPlan)
     env.execute()
   }
 
