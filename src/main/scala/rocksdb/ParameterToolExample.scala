@@ -1,4 +1,4 @@
-package util
+package rocksdb
 
 import com.typesafe.config.ConfigFactory
 import org.apache.flink.api.java.utils.ParameterTool

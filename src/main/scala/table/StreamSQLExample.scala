@@ -59,6 +59,7 @@ object StreamSQLExample {
         |SELECT STREAM * FROM OrderB WHERE amount < 2
       """.stripMargin
     )
+      .filter('amount > 0)
     result.toDataStream[Order].print()
 
     //    tEnv.sql(
