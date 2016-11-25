@@ -8,16 +8,15 @@ import org.apache.kafka.common.serialization.StringSerializer
 object KafkaProduceMain {
 
   private lazy val producer: KafkaProducer[String, String] = initProducer()
+  val itemNames = Array("Zhang San", "Kevin", "Li Si", "Li Lei", "Wang Gang", "Lee Sir")
 
   def main(args: Array[String]): Unit = {
 
-    val itemNames = Array("Zhang San", "Kevin", "Li Si", "Li Lei", "Wang Gang", "Lee Sir")
     val topic = "msg"
 
     (0 until 10000000).foreach(f => {
       val ct = System.currentTimeMillis()
-      val idx = (ct % itemNames.length).toInt
-      val payload = s"${itemNames(idx)},${f % itemNames.length},$ct"
+      val payload = newLine(f, ct)
       val msg: ProducerRecord[String, String] = new ProducerRecord(topic, payload)
       producer.send(msg)
       if (ct % 5000 == 0) {
@@ -29,6 +28,12 @@ object KafkaProduceMain {
         })
       }
     })
+  }
+
+  def newLine(i: Int, ct: Long = System.currentTimeMillis()): String = {
+    val ct = System.currentTimeMillis()
+    val idx = (ct % itemNames.length).toInt
+    s"${itemNames(idx)},${i % itemNames.length},$ct"
   }
 
   private def initProducer(host: String = "localhost:9092"): KafkaProducer[String, String] = {
