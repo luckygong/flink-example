@@ -1,22 +1,19 @@
 package rocksdb
 
-import java.io.File
-import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 
-import com.google.common.base.Charsets
-import com.google.common.io.Files
-import org.apache.flink.api.common.functions.{FoldFunction, RichFlatMapFunction}
+import org.apache.flink.api.common.functions.RichFlatMapFunction
+import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
+import org.apache.flink.api.common.typeinfo.{TypeHint, TypeInformation}
 import org.apache.flink.api.java.tuple.Tuple2
 import org.apache.flink.configuration.{ConfigConstants, Configuration}
 import org.apache.flink.contrib.streaming.state.RocksDBStateBackend
+import org.apache.flink.runtime.state.{FunctionInitializationContext, FunctionSnapshotContext}
 import org.apache.flink.streaming.api.TimeCharacteristic
-import org.apache.flink.streaming.api.checkpoint.Checkpointed
+import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction
 import org.apache.flink.streaming.api.functions.source.SourceFunction
 import org.apache.flink.streaming.api.functions.source.SourceFunction.SourceContext
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment, _}
-import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows
-import org.apache.flink.streaming.api.windowing.time.Time
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010
 import org.apache.flink.streaming.util.serialization.SimpleStringSchema
 import org.apache.flink.util.Collector
@@ -35,21 +32,20 @@ object RocksDBApp {
     prop.setProperty("group.id", "bench-" + System.currentTimeMillis())
     prop.setProperty(ConfigConstants.TASK_MANAGER_DEBUG_MEMORY_USAGE_START_LOG_THREAD, "true")
     prop.setProperty(ConfigConstants.TASK_MANAGER_DEBUG_MEMORY_USAGE_LOG_INTERVAL_MS, "3000")
+    prop.setProperty(ConfigConstants.CHECKPOINTS_DIRECTORY_KEY, "file:///Users/sjk/apps/db/checkpoint")
 
     val env = StreamExecutionEnvironment.getExecutionEnvironment
-    env.enableCheckpointing(2000)
-    env.setStateBackend(new RocksDBStateBackend("file://" + storeDir))
-    env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
+    env.enableCheckpointing(4000)
+      .setStateBackend(new RocksDBStateBackend("file://" + storeDir))
+      .setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime)
     env.getConfig.enableForceKryo()
-    env.setParallelism(8)
+    env.setParallelism(1)
 
     val topic = "msg"
     val consumer: FlinkKafkaConsumer010[String] = new FlinkKafkaConsumer010[String](topic, new SimpleStringSchema(), prop)
     val stream: DataStream[String] = env.addSource(consumer).setParallelism(2).rebalance
     val s1 = env.addSource(new SourceFunction[String]() {
-      //  todo @transient isRunning is false when running
       private var isRunning: Boolean = true
-
       override def cancel(): Unit = {
         isRunning = false
       }
@@ -59,8 +55,8 @@ object RocksDBApp {
         while (true) {
           ctx.collect(KafkaProduceMain.newLine(i))
           i = i + 1
-          if (i % 10000 == 0) {
-            Thread.sleep(2000)
+          if (i % 100 == 0) {
+            Thread.sleep(5000)
           }
         }
       }
@@ -72,10 +68,11 @@ object RocksDBApp {
         Item(array.head.trim, array(1).trim.toInt, array(2).trim.toLong)
       })
       .keyBy(_.name)
-      .window(TumblingEventTimeWindows.of(Time.seconds(5)))
-      .fold(new util.ArrayList[String](), new MyStateWindow(storeDir))
+      .flatMap(new MyFlatMapStateWindow)
       .print()
+
     println(env.getExecutionPlan)
+
     env.execute()
   }
 }
@@ -84,59 +81,36 @@ final case class Item(name: String, price: Int, timestamp: Long) {
   override def toString: String = s"$name,$price,$timestamp"
 }
 
-class MyStateWindow(storeDir: String) extends FoldFunction[Item, util.ArrayList[String]] with Checkpointed[util.ArrayList[String]] {
-  private var list = new util.ArrayList[String](102400)
+class MyFlatMapStateWindow extends RichFlatMapFunction[Item, Tuple2[String, Long]] with CheckpointedFunction {
+  @transient private var userSum: ValueState[Tuple2[String, Long]] = _
 
-  override def fold(accumulator: util.ArrayList[String], value: Item): util.ArrayList[String] = {
-    accumulator.add(value.toString)
-    if (accumulator != null)
-      list.addAll(accumulator)
-    else
-      list.add(value.toString)
+  override def flatMap(input: Item, out: Collector[Tuple2[String, Long]]): Unit = {
+    val v = userSum.value()
+    val bool = v.f0 == input.name
 
-    accumulator
-  }
+    v.f0 = input.name
+    v.f1 += input.price
+    userSum.update(v)
 
-  override def snapshotState(checkpointId: Long, checkpointTimestamp: Long): util.ArrayList[String] = {
-    val ret = new util.ArrayList[String](list.size())
-    val file = new File(s"$storeDir/raw/${System.currentTimeMillis()}")
-    file.getParentFile.mkdirs()
-
-    val it: util.Iterator[String] = ret.iterator()
-    while (it.hasNext) {
-      val str = it.next()
-      Files.append(str.toString + "\n", file, Charsets.UTF_8)
+    if (!bool) {
+      out.collect(v)
     }
-
-    Collections.copy(ret, list)
-    list.clear()
-    ret
-  }
-
-  override def restoreState(state: util.ArrayList[String]): Unit = {
-    list.clear()
-    list = state
-  }
-}
-
-class MyMapStateWindow extends RichFlatMapFunction[Item, Tuple2[String, Int]] with Checkpointed[Tuple2[String, Int]] {
-
-  @transient private var userSum: Tuple2[String, Int] = _
-
-  override def flatMap(input: Item, out: Collector[Tuple2[String, Int]]): Unit = {
-    userSum.f1 += 1
-    out.collect(userSum)
   }
 
   override def open(config: Configuration): Unit = {
-    userSum = Tuple2.of("", 0)
+    val descriptor = new ValueStateDescriptor(
+      "average",
+      TypeInformation.of(new TypeHint[Tuple2[String, Long]]() {}), // type information
+      Tuple2.of("", 0L) // default value of the state, if nothing was set
+    )
+    userSum = getRuntimeContext.getState(descriptor)
   }
 
-  override def snapshotState(checkpointId: Long, checkpointTimestamp: Long): Tuple2[String, Int] = {
-    userSum
+  override def initializeState(context: FunctionInitializationContext): Unit = {
+    context.getKeyedStateStore
   }
 
-  override def restoreState(state: Tuple2[String, Int]): Unit = {
-    userSum = state
+  override def snapshotState(context: FunctionSnapshotContext): Unit = {
+    context
   }
 }

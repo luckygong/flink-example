@@ -1,3 +1,5 @@
+package rocksdb
+
 import org.rocksdb.{FlushOptions, Options, RocksDB}
 import util.MsgBuilder
 
@@ -5,7 +7,7 @@ import util.MsgBuilder
  * rocksDB state backend test
  * Created by sjk on 11/14/16.
  */
-object RocksDBStateTest {
+object RocksDBExample {
 
 
   def main(args: Array[String]): Unit = {

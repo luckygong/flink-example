@@ -1,0 +1,53 @@
+{
+  "nodes": [
+    {
+      "id": 3,
+      "type": "Source: Custom Source",
+      "pact": "Data Source",
+      "contents": "Source: Custom Source",
+      "parallelism": 1
+    },
+    {
+      "id": 4,
+      "type": "Map",
+      "pact": "Operator",
+      "contents": "Map",
+      "parallelism": 1,
+      "predecessors": [
+        {
+          "id": 3,
+          "ship_strategy": "FORWARD",
+          "side": "second"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "TriggerWindow(TumblingEventTimeWindows(5000), FoldingStateDescriptor{serializer=org.apache.flink.api.java.typeutils.runtime.kryo.KryoSerializer@88611cf5, initialValue=[], foldFunction=rocksdb.MyStateWindow@27912e3}, EventTimeTrigger(), WindowedStream.fold(WindowedStream.java:331))",
+      "pact": "Operator",
+      "contents": "TriggerWindow(TumblingEventTimeWindows(5000), FoldingStateDescriptor{serializer=org.apache.flink.api.java.typeutils.runtime.kryo.KryoSerializer@88611cf5, initialValue=[], foldFunction=rocksdb.MyStateWindow@27912e3}, EventTimeTrigger(), WindowedStream.fold(WindowedStream.java:331))",
+      "parallelism": 1,
+      "predecessors": [
+        {
+          "id": 4,
+          "ship_strategy": "HASH",
+          "side": "second"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "Sink: Unnamed",
+      "pact": "Data Sink",
+      "contents": "Sink: Unnamed",
+      "parallelism": 1,
+      "predecessors": [
+        {
+          "id": 6,
+          "ship_strategy": "FORWARD",
+          "side": "second"
+        }
+      ]
+    }
+  ]
+}
