@@ -2,7 +2,7 @@ package rocksdb
 
 import java.util.Properties
 
-import org.apache.flink.api.common.functions.RichFlatMapFunction
+import org.apache.flink.api.common.functions.{Partitioner, RichFlatMapFunction}
 import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
 import org.apache.flink.api.common.typeinfo.{TypeHint, TypeInformation}
 import org.apache.flink.api.java.tuple.Tuple2
@@ -13,9 +13,7 @@ import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction
 import org.apache.flink.streaming.api.functions.source.SourceFunction
 import org.apache.flink.streaming.api.functions.source.SourceFunction.SourceContext
-import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment, _}
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010
-import org.apache.flink.streaming.util.serialization.SimpleStringSchema
+import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, _}
 import org.apache.flink.util.Collector
 
 
@@ -41,34 +39,29 @@ object RocksDBApp {
     env.getConfig.enableForceKryo()
     env.setParallelism(1)
 
-    val topic = "msg"
-    val consumer: FlinkKafkaConsumer010[String] = new FlinkKafkaConsumer010[String](topic, new SimpleStringSchema(), prop)
-    val stream: DataStream[String] = env.addSource(consumer).setParallelism(2).rebalance
-    val s1 = env.addSource(new SourceFunction[String]() {
-      private var isRunning: Boolean = true
-      override def cancel(): Unit = {
-        isRunning = false
-      }
+    //    val topic = "msg"
+    //    val consumer: FlinkKafkaConsumer010[String] = new FlinkKafkaConsumer010[String](topic, new SimpleStringSchema(), prop)
+    //    val stream: DataStream[String] = env.addSource(consumer).setParallelism(2).rebalance
+    val partby = new Partitioner[String]() {
+      private var roundRobin: Int = 0
 
-      override def run(ctx: SourceContext[String]): Unit = {
-        var i = 0
-        while (true) {
-          ctx.collect(KafkaProduceMain.newLine(i))
-          i = i + 1
-          if (i % 100 == 0) {
-            Thread.sleep(5000)
-          }
+      override def partition(key: String, numPartitions: Int): Int = {
+        roundRobin = roundRobin + 1
+        if (roundRobin % 2048 == 0) {
+          roundRobin = 0
         }
+        roundRobin % numPartitions
       }
-    })
+    }
 
-    s1
+    env
+      .addSource(new TestSource)
       .map(f => {
         val array = f.split(",")
         Item(array.head.trim, array(1).trim.toInt, array(2).trim.toLong)
       })
       .keyBy(_.name)
-      .flatMap(new MyFlatMapStateWindow)
+      .flatMap(new MyFlatMapStateWindow).partitionCustom(partby, 0)
       .print()
 
     println(env.getExecutionPlan)
@@ -77,12 +70,25 @@ object RocksDBApp {
   }
 }
 
-final case class Item(name: String, price: Int, timestamp: Long) {
-  override def toString: String = s"$name,$price,$timestamp"
+class TestSource extends SourceFunction[String] {
+  private var isRunning: Boolean = true
+
+  override def cancel(): Unit = isRunning = false
+
+  override def run(ctx: SourceContext[String]): Unit = {
+    var i = 0
+    while (true) {
+      ctx.collect(KafkaProduceMain.newLine(i))
+      i = i + 1
+      if (i % 100 == 0) {
+        Thread.sleep(5000)
+      }
+    }
+  }
 }
 
 class MyFlatMapStateWindow extends RichFlatMapFunction[Item, Tuple2[String, Long]] with CheckpointedFunction {
-  @transient private var userSum: ValueState[Tuple2[String, Long]] = _
+  private var userSum: ValueState[Tuple2[String, Long]] = _
 
   override def flatMap(input: Item, out: Collector[Tuple2[String, Long]]): Unit = {
     val v = userSum.value()
