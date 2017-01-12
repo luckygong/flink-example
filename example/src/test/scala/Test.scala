@@ -1,5 +1,6 @@
 import java.io.File
 
+import com.alibaba.fastjson.{JSONArray, JSONObject}
 import com.google.common.base.Charsets
 import com.google.common.io.Files
 
@@ -9,7 +10,27 @@ object Test {
   def main(args: Array[String]): Unit = {
 
     //    mergeFiles("/Users/sjk/apps/data/learning-social-circles/egonets")
-    mergeCSV("/Users/sjk/apps/data/learning-social-circles/result", "connected_conponents_result.csv")
+    //    mergeCSV("/Users/sjk/apps/data/learning-social-circles/result", "connected_conponents_result.csv")
+
+    val json = new JSONObject
+
+    val ja = new JSONArray()
+    (0 until 3).foreach(f => {
+      val obj = new JSONObject
+      obj.put("job_name", "job_avg_stock_" + f)
+      obj.put("job_param", "--xx 222 --yy 234")
+      obj.put("program_args", "abc 100000")
+      obj.put("job_prop_file", "d:/job_111.properties")
+      obj.put("jar_url", "d:/abc.jar")
+      ja.add(obj)
+    })
+
+    json.put("pipeline_id", "xxxx")
+    json.put("auther", "xxxx")
+    json.put("tag", "pipeline,stock")
+    json.put("lineage", ja)
+
+    println(json.toString)
   }
 
   def mergeCSV(directory: String, name: String): Unit = {

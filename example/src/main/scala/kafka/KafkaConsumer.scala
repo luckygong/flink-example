@@ -3,7 +3,7 @@ package kafka
 import org.apache.flink.api.common.restartstrategy.RestartStrategies
 import org.apache.flink.api.java.utils.ParameterTool
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment, _}
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer09
 import org.apache.flink.streaming.util.serialization.SimpleStringSchema
 
 /**
@@ -25,7 +25,7 @@ object KafkaConsumer {
     env.getConfig.setRestartStrategy(RestartStrategies.fixedDelayRestart(4, 10000))
     env.enableCheckpointing(5000) // create a checkpoint every 5 seconds
     env.getConfig.setGlobalJobParameters(parameterTool) // make parameters available in the web interface
-    val consumer: FlinkKafkaConsumer010[String] = new FlinkKafkaConsumer010[String](parameterTool.getRequired("topic"), new SimpleStringSchema(), parameterTool.getProperties)
+    val consumer: FlinkKafkaConsumer09[String] = new FlinkKafkaConsumer09[String](parameterTool.getRequired("topic"), new SimpleStringSchema(), parameterTool.getProperties)
     val messageStream: DataStream[String] = env.addSource(consumer)
 
     // write kafka stream to standard out.
